@@ -124,6 +124,10 @@ window.__ModuleLoader__.load({
         var col = ctrl.col;
         var win = this.win;
         if (!col || !win) return;
+        // Drop records whose element left the DOM, else flipped pins them forever.
+        for (var pair of this.flipped) {
+          if (!pair[0].isConnected) this.flipped.delete(pair[0]);
+        }
         var right = store.side !== 'left';
         var els = col.querySelectorAll('*');
         for (var i = 0; i < els.length; i++) {
@@ -216,6 +220,7 @@ window.__ModuleLoader__.load({
       corrected: null,
       ROLE_SELECTOR: '[role="menu"],[role="listbox"],[role="tooltip"],[role="dialog"],[role="alertdialog"]',
       clamp: function (el) {
+        if (!this.corr) return; // stop()ped with rAF/timeout callbacks pending
         if (!el || !el.isConnected) return;
         var rect = el.getBoundingClientRect();
         if (rect.width < 4 || rect.height < 4) return;
@@ -248,6 +253,13 @@ window.__ModuleLoader__.load({
       },
       consider: function (node) {
         if (!node || node.nodeType !== 1) return;
+        // Opportunistically prune corrections for removed popups so the Set
+        // cannot grow unbounded over the page lifetime.
+        if (this.corrected && this.corrected.size > 32) {
+          for (var el of this.corrected) {
+            if (!el.isConnected) this.corrected.delete(el);
+          }
+        }
         var role = node.getAttribute ? node.getAttribute('role') : null;
         if (role === 'menu' || role === 'listbox' || role === 'tooltip' || role === 'dialog' || role === 'alertdialog') {
           this.clampSoon(node);
@@ -332,6 +344,7 @@ window.__ModuleLoader__.load({
           pop.appendChild(item);
         })(sel.options[i]);
         pop.style.visibility = 'hidden';
+        pop.style.minWidth = Math.max(rect.width, 140) + 'px';
         doc.body.appendChild(pop);
         var popW = pop.offsetWidth;
         var popH = pop.offsetHeight;
@@ -343,7 +356,6 @@ window.__ModuleLoader__.load({
         if (top + popH > vh - 4) top = Math.max(4, rect.top - popH - 4);
         pop.style.left = left + 'px';
         pop.style.top = top + 'px';
-        pop.style.minWidth = Math.max(rect.width, 140) + 'px';
         pop.style.visibility = '';
         this.popup = pop;
         doc.addEventListener('pointerdown', this.onPopupDown, true);
@@ -417,6 +429,9 @@ window.__ModuleLoader__.load({
         var t = e.target;
         if (ctrl.col && ctrl.col.contains(t)) return;
         if (store.whaleBtn && store.whaleBtn.contains(t)) return;
+        // The select-shim popup lives on <body> (outside the column) but is
+        // part of the sidebar UI — picking an option must not dismiss us.
+        if (selectShim.popup && selectShim.popup.contains(t)) return;
         store.set('open', false);
       };
       doc.addEventListener('pointerdown', ctrl.onDocDown, true);
