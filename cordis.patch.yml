@@ -1,0 +1,4 @@
+# Plugin bundle patch: mounting this package inserts the sidebar overlay row.
+- insert:
+    - id: ui-sidebar-overlay
+      name: dsh-client-sidebar-overlay
