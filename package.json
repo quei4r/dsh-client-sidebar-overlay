@@ -1,0 +1,18 @@
+{
+  "name": "dsh-client-sidebar-overlay",
+  "description": "Sidebar overlay: whale toggle in the session header pops the sidebar as a side overlay; side switch row inside the sidebar; popup/fixed/select adaptations for the off-canvas column.",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  }
+}
