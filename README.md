@@ -2,6 +2,12 @@
 
 DeepSeek Harness（DSH）Web 界面的客户端插件：**侧栏弹出层**。
 
+## 使用场景
+
+本插件为 **VS Code 侧栏嵌入场景**设计：通过社区扩展（如 [deepseek-harness-vsc-extension](https://github.com/weinibuliu/deepseek-harness-vsc-extension)、[dsh-vscode](https://github.com/Lixxx1/dsh-vscode)、[deepseek-harness-for-vscode](https://github.com/skymecode/deepseek-harness-for-vscode) 等）把 `dsh web` 壳嵌进 VS Code 侧栏 webview 时，可用宽度非常宝贵——原生侧栏一展开就挤掉大半对话区。装上本插件后，侧栏平时完全收起，需要时以浮层形式盖在对话上方，用完即收，对话区始终占满全部宽度。
+
+> 💡 **个人推荐仅在 VS Code（或类似的窄宽度嵌入环境）中使用。** 在桌面全宽浏览器里，原生的常驻侧栏布局通常是更好的选择，本插件不会带来明显收益。
+
 ## 功能
 
 - 🐳 **鲸鱼开关**：会话头部「Session log」右侧出现鲸鱼图标，点击后侧栏以浮层形式弹出（不占用布局宽度），再点或点击外部收起；若侧栏处于图标栏状态会先自动展开为完整宽度。
