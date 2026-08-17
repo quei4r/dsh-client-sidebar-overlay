@@ -2,7 +2,6 @@
   "name": "dsh-client-sidebar-overlay",
   "description": "Sidebar as an on-demand overlay for narrow embeds (built for running the DSH web shell inside a VS Code sidebar webview): a whale toggle in the session header pops the sidebar over the conversation instead of taking layout width; side switch row inside the sidebar; popup/fixed/select adaptations for the off-canvas column.",
   "version": "0.1.1",
-  "private": true,
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -17,5 +16,24 @@
     "client": {
       "platform": "web"
     }
-  }
+  },
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "vscode",
+    "sidebar",
+    "overlay"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quei4r/dsh-client-sidebar-overlay.git"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ]
 }
