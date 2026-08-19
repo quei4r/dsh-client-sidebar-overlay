@@ -1,5 +1,7 @@
 # dsh-client-sidebar-overlay
 
+中文 | [English](README.en.md)
+
 DeepSeek Harness（DSH）Web 界面的客户端插件：**侧栏弹出层**。
 
 ## 使用场景
