@@ -42,6 +42,7 @@ window.__ModuleLoader__.load({
       '.cordis-sflip-whale[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
       '.cordis-sflip-float{position:fixed;top:10px;right:12px;z-index:60;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.35));border-radius:8px;background:var(--dsw-alias-bg-base,#1f2023);color:inherit;cursor:pointer;padding:0;box-shadow:0 2px 12px rgba(0,0,0,.3)}',
       '.cordis-sflip-float:hover,.cordis-sflip-float[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
+      '.cordis-sflip-float.is-open{display:none}',
       '.cordis-sflip-frame > [data-shell-overlay] ~ *{display:none!important}',
       '.cordis-sflip-row{display:flex;align-items:center;justify-content:center;padding:2px 4px}',
       '.cordis-sflip-row[data-wide="true"]{justify-content:flex-start;padding:0;margin:4px 0 0}',
@@ -418,6 +419,12 @@ window.__ModuleLoader__.load({
       paint: function () {
         if (!this.btn) return;
         var open = store.open;
+        // While the overlay is open the product's own collapse toggle (top of
+        // the revealed sidebar column) sits exactly under the float's corner —
+        // hide the float for the duration instead of stacking two buttons.
+        // Closing stays possible via outside click or that toggle (mapped to
+        // the overlay by ctrl.onToggleClick); the float returns on close.
+        this.btn.classList.toggle('is-open', open);
         var label = open ? '收起侧栏' : '弹出侧栏';
         this.btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         this.btn.setAttribute('aria-label', label);
@@ -524,6 +531,27 @@ window.__ModuleLoader__.load({
         store.set('open', false);
       };
       doc.addEventListener('pointerdown', ctrl.onDocDown, true);
+      // The product's sidebar collapse toggle (the logoRow's last button) is
+      // visible inside the open overlay and sits exactly where the floating
+      // whale used to. Left alone, a click there flips the PRODUCT sidebar
+      // state (rail width), which our column sync would misread as the
+      // overlay width. While this plugin owns the sidebar geometry, that
+      // button means OUR overlay — map its clicks to the overlay toggle.
+      ctrl.onToggleClick = function (e) {
+        var root = ctrl.content;
+        if (!root || !root.isConnected) return;
+        var row = root.firstElementChild;
+        if (!row || !row.contains(e.target)) return;
+        var btn = e.target.closest ? e.target.closest('button') : null;
+        if (!btn || !row.contains(btn)) return;
+        var btns = row.querySelectorAll('button');
+        if (!btns.length || btn !== btns[btns.length - 1]) return; // brand stays with the product
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        store.set('open', false);
+      };
+      doc.addEventListener('click', ctrl.onToggleClick, true);
       store.set('active', true);
       applyCol();
       whaleFloat.start(doc, win);
@@ -544,8 +572,10 @@ window.__ModuleLoader__.load({
       selectShim.stop();
       if (ctrl.onResize) win.removeEventListener('resize', ctrl.onResize);
       if (ctrl.onDocDown) doc.removeEventListener('pointerdown', ctrl.onDocDown, true);
+      if (ctrl.onToggleClick) doc.removeEventListener('click', ctrl.onToggleClick, true);
       ctrl.onResize = null;
       ctrl.onDocDown = null;
+      ctrl.onToggleClick = null;
       store.set('active', false);
       frame.classList.remove('cordis-sflip-frame');
       if (ctrl.lastCols && frame.isConnected) frame.style.gridTemplateColumns = ctrl.lastCols;
