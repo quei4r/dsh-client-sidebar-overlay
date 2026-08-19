@@ -639,6 +639,14 @@ window.__ModuleLoader__.load({
       tryAttach();
       var mo = new win.MutationObserver(function () {
         whaleFloat.sync();
+        // Auto-collapse on entering a session screen: the session header
+        // mounts its own whale toggle, so an overlay left open from the home
+        // screen would linger over the conversation with its entry button
+        // duplicated in the header. The header whale appearing (store.whaleBtn
+        // connected) while we are open means exactly that transition — close.
+        if (store.open && store.whaleBtn && store.whaleBtn.isConnected) {
+          store.set('open', false);
+        }
         if (ctrl.frame && ctrl.frame.isConnected) return;
         tryAttach();
       });
