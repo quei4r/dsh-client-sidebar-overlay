@@ -21,6 +21,12 @@
  * per-mount attach/detach made the sidebar flash back into normal layout.
  * Attachment now lives for the page lifetime and only re-attaches if the
  * AppFrame element itself is replaced.
+ *
+ * v0.1.2: the header whale sits in a session-scoped slot, so the hero /
+ * new-session main screen (no session header) hid the sidebar with no way
+ * back in. whaleFloat now mounts a fixed-position fallback whale whenever the
+ * header toggle is absent, keeping the overlay reachable from every screen
+ * (mount debounced 150ms so session-switch remounts don't flash it).
  */
 window.__ModuleLoader__.load({
   id: 'dsh-client-sidebar-overlay',
@@ -34,6 +40,8 @@ window.__ModuleLoader__.load({
       '.cordis-sflip-whale{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;padding:0}',
       '.cordis-sflip-whale:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
       '.cordis-sflip-whale[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
+      '.cordis-sflip-float{position:fixed;top:10px;right:12px;z-index:60;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.35));border-radius:8px;background:var(--dsw-alias-bg-base,#1f2023);color:inherit;cursor:pointer;padding:0;box-shadow:0 2px 12px rgba(0,0,0,.3)}',
+      '.cordis-sflip-float:hover,.cordis-sflip-float[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
       '.cordis-sflip-frame > [data-shell-overlay] ~ *{display:none!important}',
       '.cordis-sflip-row{display:flex;align-items:center;justify-content:center;padding:2px 4px}',
       '.cordis-sflip-row[data-wide="true"]{justify-content:flex-start;padding:0;margin:4px 0 0}',
@@ -385,6 +393,84 @@ window.__ModuleLoader__.load({
 
     /* ── Page-lifetime attachment ─────────────────────────────────────── */
 
+    function toggleOpen() {
+      var next = !store.open;
+      if (next && ctrl.frame && ctrl.frame.hasAttribute('data-sidebar-collapsed') && layoutSvc) {
+        layoutSvc.toggleSidebar();
+      }
+      store.set('open', next);
+    }
+
+    /* The header whale lives in a session-scoped slot, so screens without a
+     * session header (the hero / new-session main screen) would hide the
+     * sidebar with no way back in. While the header toggle is absent we mount
+     * a fixed-position fallback whale so the overlay stays reachable from
+     * every screen. */
+    var whaleFloat = {
+      doc: null,
+      win: null,
+      btn: null,
+      unsub: null,
+      timer: 0,
+      missing: function () {
+        return !!(ctrl.frame && !(store.whaleBtn && store.whaleBtn.isConnected));
+      },
+      paint: function () {
+        if (!this.btn) return;
+        var open = store.open;
+        var label = open ? '收起侧栏' : '弹出侧栏';
+        this.btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        this.btn.setAttribute('aria-label', label);
+        this.btn.title = label;
+      },
+      mount: function () {
+        var doc = this.doc;
+        if (!doc || this.btn) return;
+        var btn = doc.createElement('button');
+        btn.type = 'button';
+        btn.className = 'cordis-sflip-float';
+        btn.innerHTML = '<svg width="20" height="14.71" viewBox="0 0 23.16 17.04" fill="none" aria-hidden="true"><path d="' + FISH_PATH + '" fill="currentColor"/></svg>';
+        btn.addEventListener('click', toggleOpen);
+        doc.body.appendChild(btn);
+        this.btn = btn;
+        this.paint();
+      },
+      unmount: function () {
+        if (this.timer && this.win) { this.win.clearTimeout(this.timer); this.timer = 0; }
+        if (this.btn) { this.btn.remove(); this.btn = null; }
+      },
+      sync: function () {
+        if (!this.missing()) {
+          this.unmount();
+          return;
+        }
+        // Debounce the mount: session switches unmount/remount the header
+        // whale within one tick, and flashing a fallback for that gap looks
+        // broken. Unmount above stays immediate.
+        if (this.btn || this.timer || !this.win) return;
+        var self = this;
+        this.timer = this.win.setTimeout(function () {
+          self.timer = 0;
+          if (self.missing()) self.mount();
+        }, 150);
+      },
+      start: function (doc, win) {
+        this.doc = doc;
+        this.win = win;
+        if (!this.unsub) {
+          var self = this;
+          this.unsub = store.subscribe(function () { self.paint(); });
+        }
+      },
+      stop: function () {
+        this.unmount();
+        if (this.unsub) this.unsub();
+        this.unsub = null;
+        this.doc = null;
+        this.win = null;
+      },
+    };
+
     function attachFrame(frame, doc, win) {
       var col = frame.firstElementChild;
       if (!col) return;
@@ -429,6 +515,9 @@ window.__ModuleLoader__.load({
         var t = e.target;
         if (ctrl.col && ctrl.col.contains(t)) return;
         if (store.whaleBtn && store.whaleBtn.contains(t)) return;
+        // Same for the floating fallback whale (screens without a session
+        // header): pointerdown there must not count as an outside click.
+        if (whaleFloat.btn && whaleFloat.btn.contains(t)) return;
         // The select-shim popup lives on <body> (outside the column) but is
         // part of the sidebar UI — picking an option must not dismiss us.
         if (selectShim.popup && selectShim.popup.contains(t)) return;
@@ -437,6 +526,8 @@ window.__ModuleLoader__.load({
       doc.addEventListener('pointerdown', ctrl.onDocDown, true);
       store.set('active', true);
       applyCol();
+      whaleFloat.start(doc, win);
+      whaleFloat.sync();
     }
 
     function detachFrame(doc, win) {
@@ -477,6 +568,7 @@ window.__ModuleLoader__.load({
       ctrl.content = null;
       ctrl.saved = null;
       ctrl.lastCols = '';
+      whaleFloat.sync();
     }
 
     function findFrame(doc, win) {
@@ -499,6 +591,7 @@ window.__ModuleLoader__.load({
       };
       tryAttach();
       var mo = new win.MutationObserver(function () {
+        whaleFloat.sync();
         if (ctrl.frame && ctrl.frame.isConnected) return;
         tryAttach();
       });
@@ -506,6 +599,7 @@ window.__ModuleLoader__.load({
       return function () {
         mo.disconnect();
         detachFrame(doc, win);
+        whaleFloat.stop();
       };
     }
 
@@ -525,13 +619,7 @@ window.__ModuleLoader__.load({
         });
       }, []);
 
-      var onClick = function () {
-        var next = !store.open;
-        if (next && ctrl.frame && ctrl.frame.hasAttribute('data-sidebar-collapsed') && layoutSvc) {
-          layoutSvc.toggleSidebar();
-        }
-        store.set('open', next);
-      };
+      var onClick = function () { toggleOpen(); };
 
       var label = open ? '收起侧栏' : '弹出侧栏';
       return React.createElement(
