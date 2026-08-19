@@ -413,6 +413,7 @@ window.__ModuleLoader__.load({
       btn: null,
       unsub: null,
       timer: 0,
+      revealTimer: 0,
       missing: function () {
         return !!(ctrl.frame && !(store.whaleBtn && store.whaleBtn.isConnected));
       },
@@ -422,9 +423,24 @@ window.__ModuleLoader__.load({
         // While the overlay is open the product's own collapse toggle (top of
         // the revealed sidebar column) sits exactly under the float's corner —
         // hide the float for the duration instead of stacking two buttons.
-        // Closing stays possible via outside click or that toggle (mapped to
-        // the overlay by ctrl.onToggleClick); the float returns on close.
-        this.btn.classList.toggle('is-open', open);
+        // Hiding is immediate (the column slides INTO the corner, so the float
+        // must be gone before it arrives); revealing is DELAYED past the
+        // column's slide-OUT transition (~220ms), otherwise the whale pops
+        // back on top of the still-animating toggle — the overlap reappears
+        // for the duration of the animation.
+        if (this.revealTimer) { this.win.clearTimeout(this.revealTimer); this.revealTimer = 0; }
+        if (open) {
+          this.btn.classList.add('is-open');
+        } else {
+          var btn = this.btn;
+          var self = this;
+          this.btn.classList.add('is-open'); // stay hidden while sliding out
+          this.revealTimer = this.win.setTimeout(function () {
+            self.revealTimer = 0;
+            if (!btn.isConnected) return;
+            if (!store.open) btn.classList.remove('is-open'); // rapid re-open keeps it hidden
+          }, 240);
+        }
         var label = open ? '收起侧栏' : '弹出侧栏';
         this.btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         this.btn.setAttribute('aria-label', label);
@@ -444,6 +460,7 @@ window.__ModuleLoader__.load({
       },
       unmount: function () {
         if (this.timer && this.win) { this.win.clearTimeout(this.timer); this.timer = 0; }
+        if (this.revealTimer) { this.win.clearTimeout(this.revealTimer); this.revealTimer = 0; }
         if (this.btn) { this.btn.remove(); this.btn = null; }
       },
       sync: function () {
