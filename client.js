@@ -33,6 +33,18 @@
  * body mutation while open — the streaming conversation's DOM churn — snapped
  * a freshly opened overlay shut the same tick; the whale toggle read as dead.
  * The close now fires only on the rising edge of store.whaleBtn connectivity.
+ *
+ * v0.1.5: applyCol() on store changes was wired ONLY through the WhaleToggle
+ * React component's subscription — but the hero / new-session screen has no
+ * session header, so that component is unmounted there. Clicking the brand
+ * wordmark (new session) with the overlay open landed on the hero, and the
+ * first outside click flipped store.open to false with NOBODY re-applying the
+ * column geometry: the column stayed on screen while the state said closed.
+ * Blank clicks then no-opped (!store.open) and the whale toggled an already
+ * open column — everything read as dead. applyCol now rides a page-lifetime
+ * store subscription (attachFrame), and the auto-collapse edge tracks the
+ * whale NODE identity so an atomic same-commit remount (session switch:
+ * ref(null) then ref(node) before the observer runs) still counts as fresh.
  */
 window.__ModuleLoader__.load({
   id: 'dsh-client-sidebar-overlay',
@@ -108,6 +120,7 @@ window.__ModuleLoader__.load({
       colMo: null,
       onResize: null,
       onDocDown: null,
+      unsubStore: null,
     };
 
     var layoutSvc = null;
@@ -575,6 +588,13 @@ window.__ModuleLoader__.load({
         store.set('open', false);
       };
       doc.addEventListener('click', ctrl.onToggleClick, true);
+      // Page-lifetime geometry sync. WhaleToggle's subscription was the ONLY
+      // thing re-applying the column on store changes — and that component
+      // lives in the session-scoped header slot, which is ABSENT on the hero
+      // / new-session screen. Toggling there desynced state from geometry
+      // (column stuck on screen, store closed, every control dead). This
+      // subscription outlives any header remount; applyCol is idempotent.
+      ctrl.unsubStore = store.subscribe(function () { applyCol(); });
       store.set('active', true);
       applyCol();
       whaleFloat.start(doc, win);
@@ -599,6 +619,8 @@ window.__ModuleLoader__.load({
       ctrl.onResize = null;
       ctrl.onDocDown = null;
       ctrl.onToggleClick = null;
+      if (ctrl.unsubStore) ctrl.unsubStore();
+      ctrl.unsubStore = null;
       store.set('active', false);
       frame.classList.remove('cordis-sflip-frame');
       if (ctrl.lastCols && frame.isConnected) frame.style.gridTemplateColumns = ctrl.lastCols;
@@ -643,26 +665,28 @@ window.__ModuleLoader__.load({
         if (frame) attachFrame(frame, doc, win);
       };
       tryAttach();
-      // Rising-edge tracker for the header whale. Steady "connected" must
-      // never re-trigger anything — only the moment it APPEARS matters.
-      var hadHeaderWhale = false;
+      // Fresh-mount tracker for the header whale, by NODE IDENTITY. Plain
+      // connectivity can miss a remount: on a session switch the old header
+      // unmounts and the new one mounts within ONE React commit — refs run
+      // (store.whaleBtn = newNode) before the observer callback, so boolean
+      // connectivity reads true->true and the edge never fires. Comparing the
+      // node itself catches that; same node across DOM churn (streaming
+      // conversation) still never triggers anything.
+      var lastWhaleNode = null;
       var mo = new win.MutationObserver(function () {
         whaleFloat.sync();
         // Auto-collapse on entering a session screen: the session header
-        // mounts its own whale toggle, so an overlay left open from the home
-        // screen would linger over the conversation with its entry button
-        // duplicated in the header. That transition is the header whale
-        // APPEARING (store.whaleBtn going from absent to connected) while we
-        // are open — a rising edge, detected once. Testing the steady state
-        // instead (v0.1.3 regression) closed the overlay on EVERY body
-        // mutation while open: the header whale is connected for the whole
-        // session, so a streaming conversation's DOM churn snapped a freshly
-        // opened overlay shut the same tick — the whale read as dead.
-        var hasHeaderWhale = !!(store.whaleBtn && store.whaleBtn.isConnected);
-        if (store.open && hasHeaderWhale && !hadHeaderWhale) {
+        // mounts its own whale toggle, so an overlay left open would linger
+        // over the conversation with its entry button duplicated in the
+        // header. A FRESH whale node while we are open is exactly that
+        // transition — close once. (The v0.1.3 steady-state test instead
+        // closed on every body mutation while open, snapping a freshly
+        // opened overlay shut the same tick — the whale read as dead.)
+        var whaleNode = store.whaleBtn && store.whaleBtn.isConnected ? store.whaleBtn : null;
+        if (store.open && whaleNode && whaleNode !== lastWhaleNode) {
           store.set('open', false);
         }
-        hadHeaderWhale = hasHeaderWhale;
+        lastWhaleNode = whaleNode;
         if (ctrl.frame && ctrl.frame.isConnected) return;
         tryAttach();
       });
