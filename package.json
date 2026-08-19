@@ -9,6 +9,11 @@
     "./client": "./client.js",
     "./package.json": "./package.json"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quei4r/dsh-client-sidebar-overlay.git"
+  },
+  "author": "quei4r",
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -26,10 +31,6 @@
     "sidebar",
     "overlay"
   ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/quei4r/dsh-client-sidebar-overlay.git"
-  },
   "files": [
     "index.js",
     "client.js",
