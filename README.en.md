@@ -58,4 +58,4 @@ dsh --profile web --dump-config | grep ui-sidebar-overlay
 | `index.js` | Host-side empty placeholder (required by the loader) |
 | `client.js` | All browser-side logic (`window.__ModuleLoader__` format, depends on `react` from the seed) |
 
-Compatibility: tested against the web profile of `@deepseek-ai/dsh` 0.1.0-rc.6. If a DSH upgrade changes the product DOM structure or CSS modules, the structural probes in this plugin (frame/sidebarCol locating) may need adjusting.
+Compatibility: tested against the web profile of `@deepseek-ai/dsh` 0.1.0-rc.7. If a DSH upgrade changes the product DOM structure or CSS modules, the structural probes in this plugin (frame/sidebarCol locating) may need adjusting.

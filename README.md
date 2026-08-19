@@ -58,4 +58,4 @@ dsh --profile web --dump-config | grep ui-sidebar-overlay
 | `index.js` | 宿主侧空占位（loader 要求） |
 | `client.js` | 浏览器端全部逻辑（`window.__ModuleLoader__` 格式，依赖 seed 里的 `react`） |
 
-兼容性：随 `@deepseek-ai/dsh` 0.1.0-rc.6 的 web profile 测试通过。DSH 升级后若产品 DOM 结构或 CSS 模块变动，插件内的结构探针（frame/sidebarCol 定位）可能需要调整。
+兼容性：随 `@deepseek-ai/dsh` 0.1.0-rc.7 的 web profile 测试通过。DSH 升级后若产品 DOM 结构或 CSS 模块变动，插件内的结构探针（frame/sidebarCol 定位）可能需要调整。

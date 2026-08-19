@@ -27,6 +27,12 @@
  * back in. whaleFloat now mounts a fixed-position fallback whale whenever the
  * header toggle is absent, keeping the overlay reachable from every screen
  * (mount debounced 150ms so session-switch remounts don't flash it).
+ *
+ * v0.1.4: the v0.1.3 auto-collapse (close on session-screen entry) tested
+ * the STEADY state of the header whale instead of its appearance, so every
+ * body mutation while open — the streaming conversation's DOM churn — snapped
+ * a freshly opened overlay shut the same tick; the whale toggle read as dead.
+ * The close now fires only on the rising edge of store.whaleBtn connectivity.
  */
 window.__ModuleLoader__.load({
   id: 'dsh-client-sidebar-overlay',
@@ -637,16 +643,26 @@ window.__ModuleLoader__.load({
         if (frame) attachFrame(frame, doc, win);
       };
       tryAttach();
+      // Rising-edge tracker for the header whale. Steady "connected" must
+      // never re-trigger anything — only the moment it APPEARS matters.
+      var hadHeaderWhale = false;
       var mo = new win.MutationObserver(function () {
         whaleFloat.sync();
         // Auto-collapse on entering a session screen: the session header
         // mounts its own whale toggle, so an overlay left open from the home
         // screen would linger over the conversation with its entry button
-        // duplicated in the header. The header whale appearing (store.whaleBtn
-        // connected) while we are open means exactly that transition — close.
-        if (store.open && store.whaleBtn && store.whaleBtn.isConnected) {
+        // duplicated in the header. That transition is the header whale
+        // APPEARING (store.whaleBtn going from absent to connected) while we
+        // are open — a rising edge, detected once. Testing the steady state
+        // instead (v0.1.3 regression) closed the overlay on EVERY body
+        // mutation while open: the header whale is connected for the whole
+        // session, so a streaming conversation's DOM churn snapped a freshly
+        // opened overlay shut the same tick — the whale read as dead.
+        var hasHeaderWhale = !!(store.whaleBtn && store.whaleBtn.isConnected);
+        if (store.open && hasHeaderWhale && !hadHeaderWhale) {
           store.set('open', false);
         }
+        hadHeaderWhale = hasHeaderWhale;
         if (ctrl.frame && ctrl.frame.isConnected) return;
         tryAttach();
       });
