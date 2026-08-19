@@ -1,7 +1,7 @@
 {
   "name": "dsh-client-sidebar-overlay",
   "description": "Sidebar as an on-demand overlay for narrow embeds (built for running the DSH web shell inside a VS Code sidebar webview): a whale toggle in the session header pops the sidebar over the conversation instead of taking layout width; side switch row inside the sidebar; popup/fixed/select adaptations for the off-canvas column.",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "main": "index.js",
   "exports": {

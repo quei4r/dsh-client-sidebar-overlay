@@ -5,11 +5,13 @@
  *   collapsed rail first.
  * - Side-switch row inside the sidebar foot: overlay slides from right or
  *   left; borders/shadow follow.
- * - fixedAdapter: the off-canvas column uses transform, which makes it the
- *   containing block for position:fixed descendants (e.g. the Cordis panel,
- *   hard-coded left:12px). When the sidebar sits on the right, their left
- *   anchor is rewritten to an equivalent right anchor (and restored on the
- *   left) so panels stay on screen.
+ * - v0.1.7: the column slides with `left` instead of transform. A transformed
+ *   ancestor becomes the containing block for position:fixed descendants, so
+ *   the product's full-screen modals (settings overlay inset:0, Cordis
+ *   panel) were trapped in the 280px column — clicking 设置 appeared to do
+ *   nothing. left keeps the slide while fixed elements stay viewport-anchored;
+ *   the old fixedAdapter (a transform-workaround) is retired with it.
+ *
  * - popupClamp: role-based (menu/listbox/tooltip/dialog/alertdialog) viewport
  *   clamping via the independent CSS `translate` property.
  * - selectShim: native <select> popups are OS chrome and cannot be clamped;
@@ -117,7 +119,6 @@ window.__ModuleLoader__.load({
       lastCols: '',
       saved: null,
       mo: null,
-      colMo: null,
       onResize: null,
       onDocDown: null,
       unsubStore: null,
@@ -143,59 +144,6 @@ window.__ModuleLoader__.load({
       return out;
     }
 
-    var fixedAdapter = {
-      win: null,
-      flipped: new Map(),
-      scheduled: false,
-      scan: function () {
-        this.scheduled = false;
-        var col = ctrl.col;
-        var win = this.win;
-        if (!col || !win) return;
-        // Drop records whose element left the DOM, else flipped pins them forever.
-        for (var pair of this.flipped) {
-          if (!pair[0].isConnected) this.flipped.delete(pair[0]);
-        }
-        var right = store.side !== 'left';
-        var els = col.querySelectorAll('*');
-        for (var i = 0; i < els.length; i++) {
-          var el = els[i];
-          var cs = win.getComputedStyle(el);
-          if (cs.position !== 'fixed') continue;
-          var rec = this.flipped.get(el);
-          if (right && rec === undefined) {
-            var left = cs.left;
-            if (left !== 'auto') {
-              this.flipped.set(el, { left: el.style.left, right: el.style.right });
-              el.style.left = 'auto';
-              el.style.right = left;
-            }
-          } else if (!right && rec !== undefined) {
-            el.style.left = rec.left;
-            el.style.right = rec.right;
-            this.flipped.delete(el);
-          }
-        }
-      },
-      schedule: function () {
-        if (this.scheduled || !this.win) return;
-        this.scheduled = true;
-        var self = this;
-        this.win.requestAnimationFrame(function () { self.scan(); });
-      },
-      restoreAll: function () {
-        for (var pair of this.flipped) {
-          var el = pair[0];
-          var rec = pair[1];
-          if (el.isConnected) {
-            el.style.left = rec.left;
-            el.style.right = rec.right;
-          }
-        }
-        this.flipped.clear();
-      },
-    };
-
     function applyCol() {
       var frame = ctrl.frame;
       var col = ctrl.col;
@@ -207,12 +155,17 @@ window.__ModuleLoader__.load({
       var x;
       if (store.open) x = right ? Math.max(0, frameW - S) : 0;
       else x = right ? frameW + 4 : -(S + 4);
-      col.style.transform = 'translateX(' + x + 'px)';
+      // Slide with `left`, NOT `transform`: a transformed ancestor becomes the
+      // containing block for position:fixed descendants, so the product's
+      // full-screen modals (settings overlay, Cordis panel …) get trapped in
+      // the 280px column and read as "clicking does nothing". position:relative
+      // + left keeps the visual slide without hijacking fixed positioning.
+      col.style.left = x + 'px';
       col.style.visibility = store.open ? 'visible' : 'hidden';
       col.style.pointerEvents = store.open ? 'auto' : 'none';
       col.style.transition = store.open
-        ? 'transform .22s ease, visibility 0s linear 0s'
-        : 'transform .22s ease, visibility 0s linear .22s';
+        ? 'left .22s ease, visibility 0s linear 0s'
+        : 'left .22s ease, visibility 0s linear .22s';
       col.style.borderLeft = right ? '1px solid var(--dsw-alias-border-l1)' : 'none';
       col.style.borderRight = right ? 'none' : '1px solid var(--dsw-alias-border-l1)';
       if (ctrl.content) {
@@ -220,7 +173,6 @@ window.__ModuleLoader__.load({
           ? (right ? '-16px 0 40px rgba(0,0,0,.28)' : '16px 0 40px rgba(0,0,0,.28)')
           : 'none';
       }
-      fixedAdapter.schedule();
     }
 
     function syncCols() {
@@ -523,6 +475,7 @@ window.__ModuleLoader__.load({
       ctrl.saved = {
         width: col.style.width,
         overflow: col.style.overflow,
+        left: col.style.left,
         transform: col.style.transform,
         transition: col.style.transition,
         visibility: col.style.visibility,
@@ -545,10 +498,11 @@ window.__ModuleLoader__.load({
         }
       });
       ctrl.mo.observe(frame, { attributes: true, attributeFilter: ['style'] });
-      ctrl.colMo = new win.MutationObserver(function () { fixedAdapter.schedule(); });
-      ctrl.colMo.observe(col, { childList: true, subtree: true });
-      fixedAdapter.win = win;
-      fixedAdapter.schedule();
+      // fixedAdapter is retired: it existed to re-anchor position:fixed
+      // descendants that transform hijacked. The column now slides with
+      // `left` (no fixed-containing-block ancestor), so product full-screen
+      // modals are viewport-fixed again and must be left untouched — flipping
+      // their left↔right would break the settings overlay's inset:0 mask.
       popupClamp.start(doc, win);
       selectShim.start(doc, win);
       ctrl.onResize = function () { applyCol(); };
@@ -606,11 +560,7 @@ window.__ModuleLoader__.load({
       if (!frame) return;
       var col = ctrl.col;
       if (ctrl.mo) ctrl.mo.disconnect();
-      if (ctrl.colMo) ctrl.colMo.disconnect();
       ctrl.mo = null;
-      ctrl.colMo = null;
-      fixedAdapter.restoreAll();
-      fixedAdapter.win = null;
       popupClamp.stop();
       selectShim.stop();
       if (ctrl.onResize) win.removeEventListener('resize', ctrl.onResize);
@@ -628,6 +578,7 @@ window.__ModuleLoader__.load({
       if (s && col) {
         col.style.width = s.width;
         col.style.overflow = s.overflow;
+        col.style.left = s.left;
         col.style.transform = s.transform;
         col.style.transition = s.transition;
         col.style.visibility = s.visibility;
