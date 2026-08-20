@@ -57,7 +57,6 @@ window.__ModuleLoader__.load({
 
     var CSS = [
       '.cordis-sflip-marker{display:none}',
-      '.cordis-sflip-diag{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:99999;max-width:80vw;padding:8px 14px;border-radius:8px;background:#7a1f1f;color:#fff;border:1px solid #ff6b6b;font-size:12px;line-height:18px;box-shadow:0 8px 24px rgba(0,0,0,.5);pointer-events:none;font-family:monospace}',
       '.cordis-sflip-whale{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;padding:0}',
       '.cordis-sflip-whale:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
       '.cordis-sflip-whale[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
@@ -107,12 +106,6 @@ window.__ModuleLoader__.load({
       },
       set: function (key, value) {
         if (this[key] === value) return;
-        if (key === 'open' && value === false && diag.doc) {
-          try {
-            var st = (new Error().stack || '').split('\n').slice(2, 5).join(' | ').slice(0, 160);
-            diag.toast('open→false; caller: ' + st);
-          } catch (e) {}
-        }
         this[key] = value;
         this.emit();
       },
@@ -473,88 +466,6 @@ window.__ModuleLoader__.load({
       },
     };
 
-    /* ── TEMP DIAG (v0.1.8): visible probes for the settings no-op ────── */
-    var diag = {
-      doc: null, win: null, fns: [], mo: null,
-      toast: function (text) {
-        var doc = this.doc; if (!doc) return;
-        var el = doc.createElement('div');
-        el.className = 'cordis-sflip-diag';
-        el.textContent = '[DIAG] ' + text;
-        doc.body.appendChild(el);
-        this.win.setTimeout(function () { el.remove(); }, 5000);
-      },
-      start: function (doc, win) {
-        var self = this;
-        this.doc = doc; this.win = win;
-        this.toast('attached: col left=' + (ctrl.col && ctrl.col.style.left));
-        // 1) any page error / rejection (React render throws land here)
-        var onErr = function (e) { self.toast('ERROR ' + String(e.message || e.reason).slice(0, 120)); };
-        win.addEventListener('error', onErr);
-        win.addEventListener('unhandledrejection', onErr);
-        this.fns.push(function () {
-          win.removeEventListener('error', onErr);
-          win.removeEventListener('unhandledrejection', onErr);
-        });
-        // 2) console.error (React logs render errors even under boundaries)
-        var ce = console.error.bind(console);
-        var errs = 0;
-        console.error = function () {
-          if (errs < 5) { errs++; self.toast('console.error ' + Array.prototype.slice.call(arguments).join(' ').slice(0, 120)); }
-          ce.apply(console, arguments);
-        };
-        this.fns.push(function () { console.error = ce; });
-        // 3) settings trigger click observed at document capture
-        var onClick = function (e) {
-          var t = e.target;
-          if (!t || !t.closest) return;
-          var b = t.closest('button[aria-haspopup="dialog"]');
-          if (b) self.toast('settings trigger CLICK seen');
-        };
-        doc.addEventListener('click', onClick, true);
-        this.fns.push(function () { doc.removeEventListener('click', onClick, true); });
-        // 3b) pointerdown landing INSIDE the column: what element got it?
-        var lastDown = 0;
-        var onDownIn = function (e) {
-          if (!ctrl.col || !ctrl.col.contains(e.target)) return;
-          var now = Date.now();
-          if (now - lastDown < 400) return;
-          lastDown = now;
-          var t = e.target;
-          var b = t.closest && t.closest('button');
-          self.toast('IN-COL DOWN: ' + (t.tagName || '?') + (t.className && typeof t.className === 'string' && t.className ? '.' + t.className.split(' ')[0].slice(0, 20) : '') + (b && b.getAttribute ? ' btn-aria=' + (b.getAttribute('aria-label') || b.getAttribute('aria-haspopup') || '?') : ''));
-        };
-        doc.addEventListener('pointerdown', onDownIn, true);
-        this.fns.push(function () { doc.removeEventListener('pointerdown', onDownIn, true); });
-        // 4) role=dialog mounting anywhere
-        this.mo = new win.MutationObserver(function (records) {
-          for (var i = 0; i < records.length; i++) {
-            var nodes = records[i].addedNodes;
-            for (var j = 0; j < nodes.length; j++) {
-              var n = nodes[j];
-              if (n.nodeType !== 1) continue;
-              var dlg = n.getAttribute && n.getAttribute('role') === 'dialog' ? n : (n.querySelector && n.querySelector('[role="dialog"]'));
-              if (dlg) {
-                win.requestAnimationFrame(function () {
-                  var r = dlg.getBoundingClientRect();
-                  var cs = win.getComputedStyle(dlg);
-                  self.toast('dialog mounted rect=' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' pos=' + cs.position);
-                });
-              }
-            }
-          }
-        });
-        this.mo.observe(doc.body, { childList: true, subtree: true });
-      },
-      stop: function () {
-        if (this.mo) this.mo.disconnect();
-        this.mo = null;
-        for (var i = 0; i < this.fns.length; i++) this.fns[i]();
-        this.fns = [];
-        this.doc = null; this.win = null;
-      },
-    };
-
     function attachFrame(frame, doc, win) {
       var col = frame.firstElementChild;
       if (!col) return;
@@ -607,31 +518,26 @@ window.__ModuleLoader__.load({
         // The select-shim popup lives on <body> (outside the column) but is
         // part of the sidebar UI — picking an option must not dismiss us.
         if (selectShim.popup && selectShim.popup.contains(t)) return;
-        var chain = [];
-        var el = t;
-        for (var i = 0; i < 6 && el; i++) {
-          chain.push((el.tagName || '?') + (el.className && typeof el.className === 'string' && el.className ? '.' + el.className.split(' ')[0].slice(0, 24) : ''));
-          el = el.parentElement;
-        }
-        diag.toast('OUTSIDE-DOWN closed; chain: ' + chain.join(' < '));
         store.set('open', false);
       };
       doc.addEventListener('pointerdown', ctrl.onDocDown, true);
-      // The product's sidebar collapse toggle (the logoRow's last button) is
-      // visible inside the open overlay and sits exactly where the floating
-      // whale used to. Left alone, a click there flips the PRODUCT sidebar
-      // state (rail width), which our column sync would misread as the
-      // overlay width. While this plugin owns the sidebar geometry, that
-      // button means OUR overlay — map its clicks to the overlay toggle.
+      // The product's sidebar collapse toggle (the logoRow's toggle, aria
+      // 打开侧边栏/收起侧边栏) is visible inside the open overlay. Left alone,
+      // a click there flips the PRODUCT sidebar state (rail width), which our
+      // column sync would misread as the overlay width. While this plugin owns
+      // the sidebar geometry, that button means OUR overlay — map its clicks
+      // to the overlay toggle.
+      // v0.1.8: match the toggle BY ARIA LABEL, never by DOM position. The old
+      // positional probe ("first child's last button") misfired when the
+      // column's first element wrapped more than the logoRow: the settings
+      // trigger ended up last-in-query → clicking 设置 was swallowed as a
+      // collapse and the panel auto-dismissed — settings read as dead.
+      var TOGGLE_LABELS = ['收起侧边栏', '打开侧边栏', 'Collapse sidebar', 'Open sidebar'];
       ctrl.onToggleClick = function (e) {
-        var root = ctrl.content;
-        if (!root || !root.isConnected) return;
-        var row = root.firstElementChild;
-        if (!row || !row.contains(e.target)) return;
-        var btn = e.target.closest ? e.target.closest('button') : null;
-        if (!btn || !row.contains(btn)) return;
-        var btns = row.querySelectorAll('button');
-        if (!btns.length || btn !== btns[btns.length - 1]) return; // brand stays with the product
+        var btn = e.target && e.target.closest ? e.target.closest('button') : null;
+        if (!btn || !ctrl.col || !ctrl.col.contains(btn)) return;
+        var label = btn.getAttribute('aria-label') || btn.getAttribute('title') || '';
+        if (TOGGLE_LABELS.indexOf(label) === -1) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
@@ -647,7 +553,6 @@ window.__ModuleLoader__.load({
       ctrl.unsubStore = store.subscribe(function () { applyCol(); });
       store.set('active', true);
       applyCol();
-      diag.start(doc, win);
       whaleFloat.start(doc, win);
       whaleFloat.sync();
     }
@@ -658,7 +563,6 @@ window.__ModuleLoader__.load({
       var col = ctrl.col;
       if (ctrl.mo) ctrl.mo.disconnect();
       ctrl.mo = null;
-      diag.stop();
       popupClamp.stop();
       selectShim.stop();
       if (ctrl.onResize) win.removeEventListener('resize', ctrl.onResize);
