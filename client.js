@@ -107,6 +107,12 @@ window.__ModuleLoader__.load({
       },
       set: function (key, value) {
         if (this[key] === value) return;
+        if (key === 'open' && value === false && diag.doc) {
+          try {
+            var st = (new Error().stack || '').split('\n').slice(2, 5).join(' | ').slice(0, 160);
+            diag.toast('open→false; caller: ' + st);
+          } catch (e) {}
+        }
         this[key] = value;
         this.emit();
       },
@@ -507,6 +513,19 @@ window.__ModuleLoader__.load({
         };
         doc.addEventListener('click', onClick, true);
         this.fns.push(function () { doc.removeEventListener('click', onClick, true); });
+        // 3b) pointerdown landing INSIDE the column: what element got it?
+        var lastDown = 0;
+        var onDownIn = function (e) {
+          if (!ctrl.col || !ctrl.col.contains(e.target)) return;
+          var now = Date.now();
+          if (now - lastDown < 400) return;
+          lastDown = now;
+          var t = e.target;
+          var b = t.closest && t.closest('button');
+          self.toast('IN-COL DOWN: ' + (t.tagName || '?') + (t.className && typeof t.className === 'string' && t.className ? '.' + t.className.split(' ')[0].slice(0, 20) : '') + (b && b.getAttribute ? ' btn-aria=' + (b.getAttribute('aria-label') || b.getAttribute('aria-haspopup') || '?') : ''));
+        };
+        doc.addEventListener('pointerdown', onDownIn, true);
+        this.fns.push(function () { doc.removeEventListener('pointerdown', onDownIn, true); });
         // 4) role=dialog mounting anywhere
         this.mo = new win.MutationObserver(function (records) {
           for (var i = 0; i < records.length; i++) {
