@@ -57,6 +57,7 @@ window.__ModuleLoader__.load({
 
     var CSS = [
       '.cordis-sflip-marker{display:none}',
+      '.cordis-sflip-diag{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:99999;max-width:80vw;padding:8px 14px;border-radius:8px;background:#7a1f1f;color:#fff;border:1px solid #ff6b6b;font-size:12px;line-height:18px;box-shadow:0 8px 24px rgba(0,0,0,.5);pointer-events:none;font-family:monospace}',
       '.cordis-sflip-whale{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer;padding:0}',
       '.cordis-sflip-whale:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
       '.cordis-sflip-whale[aria-expanded="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.18))}',
@@ -466,6 +467,75 @@ window.__ModuleLoader__.load({
       },
     };
 
+    /* ── TEMP DIAG (v0.1.8): visible probes for the settings no-op ────── */
+    var diag = {
+      doc: null, win: null, fns: [], mo: null,
+      toast: function (text) {
+        var doc = this.doc; if (!doc) return;
+        var el = doc.createElement('div');
+        el.className = 'cordis-sflip-diag';
+        el.textContent = '[DIAG] ' + text;
+        doc.body.appendChild(el);
+        this.win.setTimeout(function () { el.remove(); }, 5000);
+      },
+      start: function (doc, win) {
+        var self = this;
+        this.doc = doc; this.win = win;
+        this.toast('attached: col left=' + (ctrl.col && ctrl.col.style.left));
+        // 1) any page error / rejection (React render throws land here)
+        var onErr = function (e) { self.toast('ERROR ' + String(e.message || e.reason).slice(0, 120)); };
+        win.addEventListener('error', onErr);
+        win.addEventListener('unhandledrejection', onErr);
+        this.fns.push(function () {
+          win.removeEventListener('error', onErr);
+          win.removeEventListener('unhandledrejection', onErr);
+        });
+        // 2) console.error (React logs render errors even under boundaries)
+        var ce = console.error.bind(console);
+        var errs = 0;
+        console.error = function () {
+          if (errs < 5) { errs++; self.toast('console.error ' + Array.prototype.slice.call(arguments).join(' ').slice(0, 120)); }
+          ce.apply(console, arguments);
+        };
+        this.fns.push(function () { console.error = ce; });
+        // 3) settings trigger click observed at document capture
+        var onClick = function (e) {
+          var t = e.target;
+          if (!t || !t.closest) return;
+          var b = t.closest('button[aria-haspopup="dialog"]');
+          if (b) self.toast('settings trigger CLICK seen');
+        };
+        doc.addEventListener('click', onClick, true);
+        this.fns.push(function () { doc.removeEventListener('click', onClick, true); });
+        // 4) role=dialog mounting anywhere
+        this.mo = new win.MutationObserver(function (records) {
+          for (var i = 0; i < records.length; i++) {
+            var nodes = records[i].addedNodes;
+            for (var j = 0; j < nodes.length; j++) {
+              var n = nodes[j];
+              if (n.nodeType !== 1) continue;
+              var dlg = n.getAttribute && n.getAttribute('role') === 'dialog' ? n : (n.querySelector && n.querySelector('[role="dialog"]'));
+              if (dlg) {
+                win.requestAnimationFrame(function () {
+                  var r = dlg.getBoundingClientRect();
+                  var cs = win.getComputedStyle(dlg);
+                  self.toast('dialog mounted rect=' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + ' pos=' + cs.position);
+                });
+              }
+            }
+          }
+        });
+        this.mo.observe(doc.body, { childList: true, subtree: true });
+      },
+      stop: function () {
+        if (this.mo) this.mo.disconnect();
+        this.mo = null;
+        for (var i = 0; i < this.fns.length; i++) this.fns[i]();
+        this.fns = [];
+        this.doc = null; this.win = null;
+      },
+    };
+
     function attachFrame(frame, doc, win) {
       var col = frame.firstElementChild;
       if (!col) return;
@@ -551,6 +621,7 @@ window.__ModuleLoader__.load({
       ctrl.unsubStore = store.subscribe(function () { applyCol(); });
       store.set('active', true);
       applyCol();
+      diag.start(doc, win);
       whaleFloat.start(doc, win);
       whaleFloat.sync();
     }
@@ -561,6 +632,7 @@ window.__ModuleLoader__.load({
       var col = ctrl.col;
       if (ctrl.mo) ctrl.mo.disconnect();
       ctrl.mo = null;
+      diag.stop();
       popupClamp.stop();
       selectShim.stop();
       if (ctrl.onResize) win.removeEventListener('resize', ctrl.onResize);
