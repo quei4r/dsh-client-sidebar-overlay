@@ -588,6 +588,13 @@ window.__ModuleLoader__.load({
         // The select-shim popup lives on <body> (outside the column) but is
         // part of the sidebar UI — picking an option must not dismiss us.
         if (selectShim.popup && selectShim.popup.contains(t)) return;
+        var chain = [];
+        var el = t;
+        for (var i = 0; i < 6 && el; i++) {
+          chain.push((el.tagName || '?') + (el.className && typeof el.className === 'string' && el.className ? '.' + el.className.split(' ')[0].slice(0, 24) : ''));
+          el = el.parentElement;
+        }
+        diag.toast('OUTSIDE-DOWN closed; chain: ' + chain.join(' < '));
         store.set('open', false);
       };
       doc.addEventListener('pointerdown', ctrl.onDocDown, true);
