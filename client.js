@@ -16,7 +16,10 @@
  *   than the logoRow, the settings trigger ends up last-in-query and clicking
  *   设置 was swallowed as a collapse (preventDefault + auto-dismiss) — the
  *   settings panel never opened. The remap now matches BY ARIA LABEL
- *   (收起侧边栏/打开侧边栏/Collapse/Open sidebar) and ignores everything else.
+ *   and ignores everything else.
+ * - v0.1.9: harden that label match — substring (侧边栏 / sidebar,
+ *   case-insensitive) instead of an exact phrase list, so a product
+ *   rewording cannot silently turn the collapse toggle dead again.
  *
  * - popupClamp: role-based (menu/listbox/tooltip/dialog/alertdialog) viewport
  *   clamping via the independent CSS `translate` property.
@@ -538,12 +541,18 @@ window.__ModuleLoader__.load({
       // column's first element wrapped more than the logoRow: the settings
       // trigger ended up last-in-query → clicking 设置 was swallowed as a
       // collapse and the panel auto-dismissed — settings read as dead.
-      var TOGGLE_LABELS = ['收起侧边栏', '打开侧边栏', 'Collapse sidebar', 'Open sidebar'];
+      // v0.1.9: match by SUBSTRING (侧边栏 / sidebar), not exact phrase. The
+      // v0.1.8 exact list was the same class of fragile assumption as the
+      // v0.1.7 positional probe: any product rewording (折叠侧栏, Hide
+      // sidebar …) would drop the click back to product behavior — which
+      // collapses a rail that syncCols then forces back to 0px, so the
+      // button reads dead again. No other in-column button label contains
+      // 侧边栏 (the side-switch row says 侧栏移到左/右侧) or "sidebar".
       ctrl.onToggleClick = function (e) {
         var btn = e.target && e.target.closest ? e.target.closest('button') : null;
         if (!btn || !ctrl.col || !ctrl.col.contains(btn)) return;
         var label = btn.getAttribute('aria-label') || btn.getAttribute('title') || '';
-        if (TOGGLE_LABELS.indexOf(label) === -1) return;
+        if (label.indexOf('侧边栏') === -1 && label.toLowerCase().indexOf('sidebar') === -1) return;
         e.preventDefault();
         e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
