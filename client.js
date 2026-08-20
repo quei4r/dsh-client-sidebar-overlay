@@ -11,6 +11,12 @@
  *   panel) were trapped in the 280px column — clicking 设置 appeared to do
  *   nothing. left keeps the slide while fixed elements stay viewport-anchored;
  *   the old fixedAdapter (a transform-workaround) is retired with it.
+ * - v0.1.8: the collapse-toggle remap matched the toggle BY DOM POSITION
+ *   ("first child's last button"). When the column's first element wraps more
+ *   than the logoRow, the settings trigger ends up last-in-query and clicking
+ *   设置 was swallowed as a collapse (preventDefault + auto-dismiss) — the
+ *   settings panel never opened. The remap now matches BY ARIA LABEL
+ *   (收起侧边栏/打开侧边栏/Collapse/Open sidebar) and ignores everything else.
  *
  * - popupClamp: role-based (menu/listbox/tooltip/dialog/alertdialog) viewport
  *   clamping via the independent CSS `translate` property.
